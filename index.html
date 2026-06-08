@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Collab Code Editor - Client Sandbox</title>
+  <!-- Google Fonts & Socket.io -->
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --success: #10b981;
+      --error: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      background-color: var(--bg-secondary);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--bg-tertiary);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      background: linear-gradient(to right, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      background-color: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--error);
+    }
+
+    .status-dot.connected {
+      background-color: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Side Panel */
+    .sidebar {
+      width: 350px;
+      background-color: var(--bg-secondary);
+      border-right: 1px solid var(--bg-tertiary);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      overflow-y: auto;
+    }
+
+    .panel-card {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .panel-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text-main);
+      border-left: 3px solid var(--accent);
+      padding-left: 0.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+      font-weight: 600;
+    }
+
+    input {
+      width: 100%;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--bg-tertiary);
+      border-radius: 4px;
+      padding: 0.5rem;
+      color: var(--text-main);
+      font-family: inherit;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    button {
+      width: 100%;
+      background-color: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 0.6rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .secondary-btn {
+      background-color: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      margin-top: 0.5rem;
+    }
+
+    .secondary-btn:hover {
+      background-color: rgba(99, 102, 241, 0.1);
+    }
+
+    /* Editor Viewport */
+    .editor-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--bg-primary);
+    }
+
+    .editor-header {
+      padding: 0.75rem 1.5rem;
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--bg-tertiary);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .active-room-info {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    .active-users-list {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: bold;
+      border: 2px solid var(--bg-secondary);
+    }
+
+    textarea {
+      flex: 1;
+      width: 100%;
+      background-color: #0b0f19;
+      color: #e2e8f0;
+      border: none;
+      resize: none;
+      padding: 1.5rem;
+      font-family: 'Fira Code', monospace;
+      font-size: 1rem;
+      line-height: 1.6;
+      outline: none;
+    }
+
+    .log-panel {
+      height: 150px;
+      border-top: 1px solid var(--bg-tertiary);
+      background-color: #090d16;
+      padding: 1rem;
+      overflow-y: auto;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.8rem;
+    }
+
+    .log-entry {
+      margin-bottom: 0.25rem;
+    }
+
+    .log-info { color: var(--text-muted); }
+    .log-success { color: var(--success); }
+    .log-error { color: var(--error); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>CollabCode Playground</h1>
+    <div class="status-badge">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <!-- 1. Auth Card -->
+      <div class="panel-card" id="authCard">
+        <div class="panel-title">Authentication</div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="email" value="test@example.com">
+        </div>
+        <div class="form-group">
+          <label>Password (min 8 chars)</label>
+          <input type="password" id="password" value="password123">
+        </div>
+        <button id="registerBtn">Register</button>
+        <button id="loginBtn" class="secondary-btn">Login</button>
+      </div>
+
+      <!-- 2. Rooms Card -->
+      <div class="panel-card" id="roomsCard" style="opacity: 0.5; pointer-events: none;">
+        <div class="panel-title">Rooms Management</div>
+        <div class="form-group">
+          <label>Room ID</label>
+          <input type="text" id="roomId" placeholder="Enter room UUID">
+        </div>
+        <button id="joinRoomBtn">Join Room</button>
+        <div style="margin: 1rem 0; border-top: 1px solid var(--bg-tertiary);"></div>
+        <div class="form-group">
+          <label>Create New Room</label>
+          <input type="text" id="newRoomName" placeholder="Room Name" value="Developer Lounge">
+        </div>
+        <button id="createRoomBtn">Create & Join</button>
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="editor-container">
+      <div class="editor-header">
+        <div class="active-room-info" id="activeRoomName">No Active Room</div>
+        <div class="active-users-list" id="usersList"></div>
+      </div>
+      <textarea id="editor" disabled placeholder="// Join a room to start collaborative editing..."></textarea>
+      
+      <!-- Logger console -->
+      <div class="log-panel" id="logPanel">
+        <div class="log-entry log-info">[Console initialized. Ready to connect.]</div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let socket = null;
+    let token = '';
+    let currentRoomId = '';
+    let documentVersion = 0;
+
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const roomIdInput = document.getElementById('roomId');
+    const newRoomNameInput = document.getElementById('newRoomName');
+    const registerBtn = document.getElementById('registerBtn');
+    const loginBtn = document.getElementById('loginBtn');
+    const joinRoomBtn = document.getElementById('joinRoomBtn');
+    const createRoomBtn = document.getElementById('createRoomBtn');
+    const roomsCard = document.getElementById('roomsCard');
+    const editor = document.getElementById('editor');
+    const logPanel = document.getElementById('logPanel');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const activeRoomName = document.getElementById('activeRoomName');
+    const usersList = document.getElementById('usersList');
+
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.innerText = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logPanel.appendChild(entry);
+      logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    // Register User
+    registerBtn.addEventListener('click', async () => {
+      try {
+        const res = await fetch('http://localhost:3000/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailInput.value, password: passwordInput.value })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          log('Registered successfully!', 'success');
+          token = data.token;
+          enableRooms();
+        } else {
+          log(`Registration failed: ${data.message}`, 'error');
+        }
+      } catch (err) {
+        log(`Network error: ${err.message}`, 'error');
+      }
+    });
+
+    // Login User
+    loginBtn.addEventListener('click', async () => {
+      try {
+        const res = await fetch('http://localhost:3000/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailInput.value, password: passwordInput.value })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          log('Logged in successfully!', 'success');
+          token = data.token;
+          enableRooms();
+        } else {
+          log(`Login failed: ${data.message}`, 'error');
+        }
+      } catch (err) {
+        log(`Network error: ${err.message}`, 'error');
+      }
+    });
+
+    function enableRooms() {
+      roomsCard.style.opacity = '1';
+      roomsCard.style.pointerEvents = 'auto';
+    }
+
+    // Create Room
+    createRoomBtn.addEventListener('click', async () => {
+      try {
+        const res = await fetch('http://localhost:3000/api/rooms', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ name: newRoomNameInput.value })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          log(`Room created: ${data.room.name} (${data.room.id})`, 'success');
+          roomIdInput.value = data.room.id;
+          joinRoom(data.room.id);
+        } else {
+          log(`Create Room failed: ${data.message}`, 'error');
+        }
+      } catch (err) {
+        log(`Network error: ${err.message}`, 'error');
+      }
+    });
+
+    joinRoomBtn.addEventListener('click', () => {
+      if (!roomIdInput.value) return log('Please enter a Room ID', 'error');
+      joinRoom(roomIdInput.value);
+    });
+
+    function joinRoom(id) {
+      if (socket) {
+        socket.disconnect();
+      }
+
+      currentRoomId = id;
+      log(`Connecting WebSockets for room: ${id}...`);
+
+      socket = io('http://localhost:3000', {
+        transports: ['websocket']
+      });
+
+      socket.on('connect', () => {
+        statusDot.className = 'status-dot connected';
+        statusText.innerText = 'Connected';
+        log('Socket connected! Sending join-room...', 'success');
+
+        // Join request
+        socket.emit('join-room', { roomId: currentRoomId, token });
+      });
+
+      socket.on('disconnect', () => {
+        statusDot.className = 'status-dot';
+        statusText.innerText = 'Disconnected';
+        log('Socket disconnected', 'error');
+      });
+
+      // Server successfully acknowledged join
+      socket.on('room-joined', ({ users, document: doc }) => {
+        log('Joined room event received!', 'success');
+        activeRoomName.innerText = `Active Room: ${currentRoomId}`;
+        editor.disabled = false;
+        editor.value = doc.content;
+        prevText = doc.content;
+        documentVersion = doc.version;
+        updateUsersList(users);
+      });
+
+      socket.on('user-joined', (user) => {
+        log(`User joined: ${user.email}`, 'info');
+      });
+
+      socket.on('user-left', ({ userId }) => {
+        log(`User left room: ${userId}`, 'info');
+      });
+
+      // Handle text sync from other users
+      socket.on('text-delta', ({ delta, version, userId }) => {
+        // Simple update (ignoring full OT logic on client for simplicity)
+        if (userId !== socket.id) {
+          log(`Received delta from user ${userId} (version: ${version})`);
+          documentVersion = version;
+          if (delta.type === 'insert') {
+            const val = editor.value;
+            editor.value = val.substring(0, delta.position) + delta.text + val.substring(delta.position);
+          } else if (delta.type === 'delete') {
+            const val = editor.value;
+            editor.value = val.substring(0, delta.position) + val.substring(delta.position + delta.length);
+          }
+          prevText = editor.value;
+        }
+      });
+
+      socket.on('auth-error', ({ message }) => {
+        log(`Socket Auth Error: ${message}`, 'error');
+      });
+    }
+
+    function updateUsersList(users) {
+      usersList.innerHTML = '';
+      users.forEach(u => {
+        const av = document.createElement('div');
+        av.className = 'user-avatar';
+        av.title = u.email;
+        av.innerText = u.email.substring(0, 2).toUpperCase();
+        usersList.appendChild(av);
+      });
+    }
+
+    // Input listening to emit edits
+    let prevText = '';
+    let prevCursorPos = 0;
+
+    // Capture state BEFORE the input changes
+    editor.addEventListener('keydown', () => {
+      prevText = editor.value;
+      prevCursorPos = editor.selectionStart;
+    });
+
+    editor.addEventListener('input', (e) => {
+      if (!socket) return;
+      const newText = editor.value;
+      const cursorPos = editor.selectionStart;
+      const deltas = [];
+
+      const lengthDiff = newText.length - prevText.length;
+
+      if (lengthDiff > 0) {
+        // Text was inserted
+        const insertPos = cursorPos - lengthDiff;
+        const insertedText = newText.substring(insertPos, cursorPos);
+        deltas.push({ type: 'insert', position: insertPos, text: insertedText });
+      } else if (lengthDiff < 0) {
+        // Text was deleted
+        const deleteLen = Math.abs(lengthDiff);
+        const deletePos = cursorPos;
+        deltas.push({ type: 'delete', position: deletePos, length: deleteLen });
+      } else if (lengthDiff === 0 && newText !== prevText) {
+        // Selection was replaced with same-length text (rare but possible)
+        const deletePos = cursorPos - prevText.length + newText.length;
+        deltas.push({ type: 'delete', position: deletePos, length: prevText.length - newText.length || 1 });
+        deltas.push({ type: 'insert', position: deletePos, text: newText.substring(deletePos, cursorPos) });
+      }
+
+      // Emit each delta
+      for (const delta of deltas) {
+        socket.emit('text-delta', {
+          roomId: currentRoomId,
+          version: documentVersion,
+          delta
+        });
+        documentVersion++;
+      }
+
+      prevText = newText;
+    });
+
+  </script>
+</body>
+</html>
